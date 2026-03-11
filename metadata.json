@@ -1,0 +1,5 @@
+{
+  "name": "Hyperliquid TMA",
+  "description": "A Telegram Mini App version of Hyperliquid decentralized perpetual exchange.",
+  "requestFramePermissions": []
+}
