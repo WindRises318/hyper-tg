@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { toast } from 'sonner';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -25,7 +26,7 @@ export const TradePanel: React.FC<TradePanelProps> = ({ symbol, price, balance, 
     if (isTrading) return;
     const numSizeUsd = parseFloat(sizeUsd);
     if (isNaN(numSizeUsd) || numSizeUsd <= 0) {
-      alert('Please enter a valid size in USDC');
+      toast.error('Please enter a valid size in USDC');
       return;
     }
     onTrade(side, numSizeUsd, leverage);

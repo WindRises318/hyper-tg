@@ -24,7 +24,7 @@ export const Chart: React.FC<ChartProps> = ({ data, symbol }) => {
         horzLines: { color: '#161a1e' },
       },
       width: chartContainerRef.current.clientWidth,
-      height: 300,
+      height: 220,
       timeScale: {
         borderColor: '#2b3139',
         timeVisible: true,

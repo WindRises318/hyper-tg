@@ -17,6 +17,7 @@ import { formatPriceTo5SigFigs } from './services/hyperliquidUtils';
 import { dbService } from './services/dbService';
 import { motion, AnimatePresence } from 'motion/react';
 import { TrendingUp, TrendingDown, History, User, Activity, Loader2, ArrowUpRight, ArrowDownRight, Wallet } from 'lucide-react';
+import { Toaster, toast } from 'sonner';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -274,12 +275,12 @@ export default function App() {
     console.log('handleTrade called:', { side, sizeUsd, leverage, marketPrice: market.price, balance: profile.balance });
     
     if (!hlAccount) {
-      alert('Please configure your Hyperliquid private key in .env.local to trade.');
+      toast.error('Please configure your Hyperliquid private key in .env.local to trade.');
       return;
     }
 
     if (market.price <= 0) {
-      alert('Waiting for market price to update. Please try again in a moment.');
+      toast.error('Waiting for market price to update. Please try again in a moment.');
       return;
     }
 
@@ -299,7 +300,7 @@ export default function App() {
       const coinSize = parseFloat(rawCoinSize.toFixed(szDecimals));
 
       if (coinSize <= 0) {
-        alert(`Size too small. Minimum size is ${Math.pow(10, -szDecimals)} ${selectedCoin}`);
+        toast.error(`Size too small. Minimum size is ${Math.pow(10, -szDecimals)} ${selectedCoin}`);
         return;
       }
 
@@ -330,14 +331,14 @@ export default function App() {
       console.log('API Trade Result:', data);
       
       if (data.success) {
-        alert(`Order placed successfully! Trade ID: ${data.tradeId}`);
+        toast.success(`Order placed successfully! Trade ID: ${data.tradeId}`);
         setRefreshKey(prev => prev + 1);
       } else {
         throw new Error(data.error || 'Trade failed');
       }
     } catch (err: any) {
       console.error('HL Trade failed:', err);
-      alert(`Trade failed: ${err.message}`);
+      toast.error(`Trade failed: ${err.message}`);
     } finally {
       setIsTrading(false);
     }
@@ -350,7 +351,7 @@ export default function App() {
     if (!pos) return;
 
     if (!hlAccount) {
-      alert('Please configure your Hyperliquid private key in .env.local to close positions.');
+      toast.error('Please configure your Hyperliquid private key in .env.local to close positions.');
       return;
     }
 
@@ -365,7 +366,7 @@ export default function App() {
       const currentPrice = allPrices[pos.symbol] || pos.markPrice;
       
       if (currentPrice <= 0) {
-        alert('Waiting for market price to update. Please try again in a moment.');
+        toast.error('Waiting for market price to update. Please try again in a moment.');
         setClosingPositionIds(prev => {
           const next = new Set(prev);
           next.delete(id);
@@ -389,14 +390,14 @@ export default function App() {
 
       const result = await hyperliquidService.placeOrder(order);
       if (result.status === 'ok') {
-        alert('Position closed on Hyperliquid!');
+        toast.success('Position closed on Hyperliquid!');
         setRefreshKey(prev => prev + 1);
       } else {
         throw new Error(JSON.stringify(result));
       }
     } catch (err: any) {
       console.error('HL Close failed:', err);
-      alert(`Failed to close HL position: ${err.message}`);
+      toast.error(`Failed to close HL position: ${err.message}`);
     } finally {
       setClosingPositionIds(prev => {
         const next = new Set(prev);
@@ -408,6 +409,7 @@ export default function App() {
 
   return (
     <div className="flex flex-col min-h-screen bg-hl-bg text-hl-text max-w-md mx-auto shadow-2xl">
+      <Toaster position="top-center" richColors theme="dark" />
       <Header 
         profile={{ ...profile, equity: currentEquity }} 
         market={market} 
@@ -498,63 +500,53 @@ export default function App() {
                   </div>
                 ) : (
                   <div className="p-4 bg-hl-surface">
-                    <div className="flex justify-between items-center mb-4 px-1">
+                    <div className="flex justify-between items-end mb-6 px-1">
                       <div className="flex flex-col">
-                        <h3 className="text-[10px] font-bold text-hl-text-muted uppercase tracking-widest">Market Depth</h3>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <div className="w-1.5 h-1.5 rounded-full bg-hl-green animate-pulse" />
-                          <span className="text-[9px] text-hl-text-muted font-mono">Live Feed</span>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-[10px] font-bold text-hl-text-muted uppercase tracking-widest">Market Depth</h3>
+                          <div className={cn(
+                            "flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold",
+                            market.change24h >= 0 ? "bg-hl-green/10 text-hl-green" : "bg-hl-red/10 text-hl-red"
+                          )}>
+                            {market.change24h >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+                            {Math.abs(market.change24h).toFixed(2)}%
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 mt-1">
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-1.5 h-1.5 rounded-full bg-hl-green animate-pulse" />
+                            <span className="text-[9px] text-hl-text-muted font-mono">Live Feed</span>
+                          </div>
+                          <div className="flex items-center gap-1 text-[9px] text-hl-text-muted font-mono border-l border-hl-border pl-2">
+                            <span>Step</span>
+                            <span className="text-hl-green font-bold">0.01</span>
+                          </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 bg-hl-bg px-2 py-1 rounded border border-hl-border">
-                        <span className="text-[10px] text-hl-text-muted">Step</span>
-                        <span className="text-[10px] text-hl-green font-mono font-bold">0.01</span>
+                      <div className="flex flex-col items-end">
+                        <span className={cn(
+                          "text-xl font-black tracking-tighter leading-none",
+                          market.change24h >= 0 ? "text-hl-green" : "text-hl-red"
+                        )}>
+                          {market.price.toFixed(2)}
+                        </span>
                       </div>
                     </div>
                     
                     <div className="grid grid-cols-2 gap-4 mb-2 px-1 text-[9px] font-bold text-hl-text-muted uppercase tracking-tighter">
                       <div className="flex justify-between">
-                        <span>Price</span>
+                        <span>Bid Price</span>
                         <span>Size</span>
                       </div>
                       <div className="flex justify-between">
-                        <span>Price</span>
+                        <span>Ask Price</span>
                         <span>Size</span>
                       </div>
                     </div>
 
-                    <div className="flex flex-col gap-0.5 font-mono text-[11px]">
-                      {/* Bids and Asks side by side or stacked? Let's keep it stacked but cleaner */}
+                    <div className="grid grid-cols-2 gap-4 font-mono text-[11px]">
                       <div className="flex flex-col gap-0.5">
-                        {orderBook?.levels?.[1]?.slice(0, 6).reverse().map((level, i) => (
-                          <div key={`ask-${i}`} className="flex justify-between relative py-0.5 px-1 group hover:bg-hl-red/5 transition-colors">
-                            <div 
-                              className="absolute inset-y-0 right-0 bg-hl-red/10 transition-all duration-500" 
-                              style={{ 
-                                width: `${Math.min(100, (parseFloat(level.sz) / 5) * 100)}%`, 
-                              }} 
-                            />
-                            <span className="text-hl-red font-bold z-10">{parseFloat(level.px).toFixed(2)}</span>
-                            <span className="text-hl-text/80 z-10">{parseFloat(level.sz).toFixed(3)}</span>
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className="py-3 my-1 flex items-center justify-center gap-3 bg-hl-bg/30 rounded-lg border-y border-hl-border/50">
-                        <span className="text-lg font-black text-hl-text tracking-tight">
-                          {market.price.toFixed(2)}
-                        </span>
-                        <div className={cn(
-                          "flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold",
-                          market.change24h >= 0 ? "bg-hl-green/10 text-hl-green" : "bg-hl-red/10 text-hl-red"
-                        )}>
-                          {market.change24h >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
-                          {Math.abs(market.change24h).toFixed(2)}%
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col gap-0.5">
-                        {orderBook?.levels?.[0]?.slice(0, 6).map((level, i) => (
+                        {orderBook?.levels?.[0]?.slice(0, 10).map((level, i) => (
                           <div key={`bid-${i}`} className="flex justify-between relative py-0.5 px-1 group hover:bg-hl-green/5 transition-colors">
                             <div 
                               className="absolute inset-y-0 right-0 bg-hl-green/10 transition-all duration-500" 
@@ -563,6 +555,21 @@ export default function App() {
                               }} 
                             />
                             <span className="text-hl-green font-bold z-10">{parseFloat(level.px).toFixed(2)}</span>
+                            <span className="text-hl-text/80 z-10">{parseFloat(level.sz).toFixed(3)}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="flex flex-col gap-0.5">
+                        {orderBook?.levels?.[1]?.slice(0, 10).map((level, i) => (
+                          <div key={`ask-${i}`} className="flex justify-between relative py-0.5 px-1 group hover:bg-hl-red/5 transition-colors">
+                            <div 
+                              className="absolute inset-y-0 right-0 bg-hl-red/10 transition-all duration-500" 
+                              style={{ 
+                                width: `${Math.min(100, (parseFloat(level.sz) / 5) * 100)}%`, 
+                              }} 
+                            />
+                            <span className="text-hl-red font-bold z-10">{parseFloat(level.px).toFixed(2)}</span>
                             <span className="text-hl-text/80 z-10">{parseFloat(level.sz).toFixed(3)}</span>
                           </div>
                         ))}

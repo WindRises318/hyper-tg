@@ -38,33 +38,31 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="text-black font-bold text-xs">HL</span>
           </div>
           <div className="flex flex-col">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-hl-text-muted font-medium">Hyperliquid</span>
-              <div className="flex bg-hl-surface rounded p-0.5 border border-hl-border">
-                <button 
-                  onClick={() => onNetworkChange('mainnet')}
-                  className={cn(
-                    "px-1.5 py-0.5 rounded-[2px] text-[8px] font-bold uppercase transition-all",
-                    network === 'mainnet' ? "bg-hl-green text-black" : "text-hl-text-muted"
-                  )}
-                >
-                  Main
-                </button>
-                <button 
-                  onClick={() => onNetworkChange('testnet')}
-                  className={cn(
-                    "px-1.5 py-0.5 rounded-[2px] text-[8px] font-bold uppercase transition-all",
-                    network === 'testnet' ? "bg-hl-green text-black" : "text-hl-text-muted"
-                  )}
-                >
-                  Test
-                </button>
-              </div>
-            </div>
+            <span className="text-xs text-hl-text-muted font-medium">Hyperliquid</span>
             <span className="text-sm font-bold text-hl-text">TMA Edition</span>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          <div className="flex bg-hl-surface rounded p-0.5 border border-hl-border">
+            <button 
+              onClick={() => onNetworkChange('mainnet')}
+              className={cn(
+                "px-1.5 py-0.5 rounded-[2px] text-[8px] font-bold uppercase transition-all",
+                network === 'mainnet' ? "bg-hl-green text-black" : "text-hl-text-muted"
+              )}
+            >
+              Main
+            </button>
+            <button 
+              onClick={() => onNetworkChange('testnet')}
+              className={cn(
+                "px-1.5 py-0.5 rounded-[2px] text-[8px] font-bold uppercase transition-all",
+                network === 'testnet' ? "bg-hl-green text-black" : "text-hl-text-muted"
+              )}
+            >
+              Test
+            </button>
+          </div>
           <button className="text-hl-text-muted hover:text-hl-text p-1">
             <Bell size={18} />
           </button>
