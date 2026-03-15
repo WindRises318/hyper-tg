@@ -324,6 +324,5 @@ export class HyperliquidService {
 }
 
 export const hyperliquidService = new HyperliquidService(
-  process.env.NEXT_PUBLIC_HYPERLIQUID_PRIVATE_KEY,
-  process.env.NEXT_PUBLIC_HYPERLIQUID_WALLET_ADDRESS
+  process.env.NEXT_PUBLIC_HYPERLIQUID_PRIVATE_KEY
 );
