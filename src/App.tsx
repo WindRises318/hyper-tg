@@ -94,12 +94,19 @@ export default function App() {
 
         // Check HL Account
         const address = hyperliquidService.getAddress();
+        console.log("Hyperliquid Address used for balance:", address);
         if (address) {
           setHlAccount(address);
           const hlState = await hyperliquidService.getAccountState(address);
+          console.log("Hyperliquid Account State:", hlState);
           if (!isMounted) return;
           if (hlState) {
-            const hlBalance = parseFloat(hlState.marginSummary?.accountValue || hlState.withdrawable || '0');
+            const hlBalance = parseFloat(
+              hlState.crossMarginSummary?.accountValue || 
+              hlState.marginSummary?.accountValue || 
+              hlState.withdrawable || 
+              '0'
+            );
             setProfile({
               id: address,
               username: `HL-${address.slice(0, 6)}`,

@@ -1,4 +1,6 @@
-import { Hyperliquid } from 'hyperliquid';
+import { privateKeyToAccount } from 'viem/accounts';
+import { Hex } from 'viem';
+import { signL1Action, orderToWire, orderWireToAction } from './hyperliquidUtils';
 
 export type HLNetwork = 'mainnet' | 'testnet';
 
@@ -23,78 +25,104 @@ export interface HLMarket {
 }
 
 export class HyperliquidService {
-  private sdk: Hyperliquid | null = null;
   private network: HLNetwork = 'testnet';
   private privateKey: string | undefined;
   private walletAddress: string | undefined;
+  private ws: WebSocket | null = null;
+  private wsCallbacks: Map<string, Set<(data: any) => void>> = new Map();
+  private assetCtxsCache: any = null;
+  private metaCache: any = null;
 
   constructor(privateKey?: string, walletAddress?: string) {
-    this.privateKey = privateKey;
-    this.walletAddress = walletAddress;
-    const config = {
-      privateKey: privateKey && privateKey.startsWith('0x') ? privateKey : undefined,
-      walletAddress: walletAddress && walletAddress.startsWith('0x') ? walletAddress : undefined,
-      testnet: this.network === 'testnet',
-      enableWs: true
-    };
-    this.sdk = new Hyperliquid(config);
+    console.log("HyperliquidService init:", { 
+      hasPrivateKey: !!privateKey, 
+      walletAddress: walletAddress 
+    });
+    this.privateKey = privateKey && privateKey.startsWith('0x') ? privateKey : undefined;
+    this.walletAddress = walletAddress ? (walletAddress.startsWith('0x') ? walletAddress : `0x${walletAddress}`) : undefined;
+    this.connectWs();
   }
 
   setNetwork(network: HLNetwork) {
     if (this.network !== network) {
       this.network = network;
-      
-      // Disconnect old SDK to prevent memory leaks and zombie WebSockets
-      if (this.sdk) {
-        try {
-          this.sdk.disconnect();
-        } catch (e) {
-          console.error('Error disconnecting old SDK:', e);
-        }
-      }
-
-      // Re-initialize SDK for the new network
-      const config = {
-        privateKey: this.privateKey && this.privateKey.startsWith('0x') ? this.privateKey : undefined,
-        walletAddress: this.walletAddress && this.walletAddress.startsWith('0x') ? this.walletAddress : undefined,
-        testnet: network === 'testnet',
-        enableWs: true
-      };
-      this.sdk = new Hyperliquid(config);
+      this.metaCache = null;
+      this.assetCtxsCache = null;
+      this.connectWs();
     }
   }
 
+  private getApiUrl() {
+    return this.network === 'mainnet' ? 'https://api.hyperliquid.xyz' : 'https://api.hyperliquid-testnet.xyz';
+  }
+
+  private getWsUrl() {
+    return this.network === 'mainnet' ? 'wss://api.hyperliquid.xyz/ws' : 'wss://api.hyperliquid-testnet.xyz/ws';
+  }
+
+  private connectWs() {
+    if (typeof window === 'undefined') return; // Don't connect WS on server
+    if (this.ws) {
+      this.ws.close();
+    }
+    this.ws = new WebSocket(this.getWsUrl());
+    this.ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.channel) {
+          const callbacks = this.wsCallbacks.get(data.channel);
+          if (callbacks) {
+            callbacks.forEach(cb => cb(data.data));
+          }
+        }
+      } catch (e) {
+        console.error('WS message parse error', e);
+      }
+    };
+    this.ws.onopen = () => {
+      // Resubscribe
+      for (const channel of this.wsCallbacks.keys()) {
+        if (channel === 'l2Book') {
+          // We need to know which coins to resubscribe to, but for simplicity we'll just let the components handle it
+        } else if (channel === 'allMids') {
+          this.ws?.send(JSON.stringify({ method: 'subscribe', subscription: { type: 'allMids' } }));
+        }
+      }
+    };
+  }
+
+  async fetchApi(endpoint: string, payload: any) {
+    const res = await fetch(`${this.getApiUrl()}${endpoint}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      throw new Error(`Hyperliquid API error: ${res.statusText}`);
+    }
+    return res.json();
+  }
+
   async getInfo(type: string, payload: any = {}) {
-    if (!this.sdk) throw new Error('SDK not initialized');
-    // The SDK provides a generic way to call info if needed, 
-    // but it's better to use the specific methods.
-    // However, for compatibility with existing code:
-    return (this.sdk.info as any).custom({ type, ...payload });
+    return this.fetchApi('/info', { type, ...payload });
   }
 
   async fetchMeta() {
-    if (!this.sdk) throw new Error('SDK not initialized');
-    return this.sdk.info.perpetuals.getMeta();
+    if (!this.metaCache) {
+      this.metaCache = await this.getInfo('meta');
+    }
+    return this.metaCache;
   }
 
   async getInfoCompat(type: string, payload: any = {}) {
-    if (!this.sdk) throw new Error('SDK not initialized');
-    // Map existing getInfo calls to SDK methods where possible
-    if (type === 'metaAndAssetCtxs') return this.sdk.info.perpetuals.getMetaAndAssetCtxs();
-    if (type === 'allMids') return this.sdk.info.getAllMids();
-    if (type === 'clearinghouseState') return this.sdk.info.perpetuals.getClearinghouseState(payload.user);
-    
-    // Fallback for others
-    return (this.sdk.info as any).custom({ type, ...payload });
+    return this.getInfo(type, payload);
   }
 
-  // Override getInfo to use the compat version for existing calls
   async getInfoProxy(type: string, payload: any = {}) {
-    return this.getInfoCompat(type, payload);
+    return this.getInfo(type, payload);
   }
 
   async fetchCandles(coin: string, interval: string = '15m'): Promise<Candle[]> {
-    if (!this.sdk) return [];
     const endTime = Date.now();
     let lookback = 24 * 60 * 60 * 1000;
     if (interval === '1m') lookback = 2 * 60 * 60 * 1000;
@@ -104,7 +132,9 @@ export class HyperliquidService {
     if (interval === '1d') lookback = 60 * 24 * 60 * 60 * 1000;
 
     const startTime = endTime - lookback;
-    const data = await this.sdk.info.getCandleSnapshot(coin, interval, startTime, endTime);
+    const data = await this.getInfo('candleSnapshot', {
+      req: { coin, interval, startTime, endTime }
+    });
     
     if (!Array.isArray(data)) return [];
 
@@ -119,69 +149,79 @@ export class HyperliquidService {
   }
 
   subscribeToL2Book(coin: string, callback: (data: any) => void) {
-    if (!this.sdk) return () => {};
-    const currentSdk = this.sdk;
-    let isSubscribed = true;
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      // If not open, wait a bit and try again
+      setTimeout(() => this.subscribeToL2Book(coin, callback), 1000);
+      return () => {};
+    }
 
-    currentSdk.connect().then(() => {
-      if (!isSubscribed) return;
-      if (!currentSdk.ws || !currentSdk.ws.isConnected()) {
-        console.warn("WebSocket is not connected, skipping L2Book subscription");
-        return;
-      }
-      currentSdk.subscriptions.subscribeToL2Book(coin, (data) => {
+    const channel = 'l2Book';
+    if (!this.wsCallbacks.has(channel)) {
+      this.wsCallbacks.set(channel, new Set());
+    }
+    
+    const wrappedCallback = (data: any) => {
+      if (data.coin === coin) {
         callback(data);
-      }).catch(e => console.error("Failed to subscribe to L2Book", e));
-    }).catch(e => console.error("Failed to connect SDK", e));
+      }
+    };
+    
+    this.wsCallbacks.get(channel)!.add(wrappedCallback);
+    this.ws.send(JSON.stringify({ method: 'subscribe', subscription: { type: 'l2Book', coin } }));
 
     return () => {
-      isSubscribed = false;
-      try {
-        if (currentSdk.ws && currentSdk.ws.isConnected()) {
-          currentSdk.subscriptions.unsubscribeFromL2Book(coin).catch(() => {});
+      const callbacks = this.wsCallbacks.get(channel);
+      if (callbacks) {
+        callbacks.delete(wrappedCallback);
+        if (callbacks.size === 0) {
+          this.ws?.send(JSON.stringify({ method: 'unsubscribe', subscription: { type: 'l2Book', coin } }));
         }
-      } catch (e) {
-        // Ignore errors if already disconnected
       }
     };
   }
 
   subscribeToAllMids(callback: (mids: Record<string, string>) => void) {
-    if (!this.sdk) return () => {};
-    const currentSdk = this.sdk;
-    let isSubscribed = true;
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      setTimeout(() => this.subscribeToAllMids(callback), 1000);
+      return () => {};
+    }
 
-    currentSdk.connect().then(() => {
-      if (!isSubscribed) return;
-      if (!currentSdk.ws || !currentSdk.ws.isConnected()) {
-        console.warn("WebSocket is not connected, skipping AllMids subscription");
-        return;
+    const channel = 'allMids';
+    if (!this.wsCallbacks.has(channel)) {
+      this.wsCallbacks.set(channel, new Set());
+      this.ws.send(JSON.stringify({ method: 'subscribe', subscription: { type: 'allMids' } }));
+    }
+    
+    const wrappedCallback = (data: any) => {
+      if (data && data.mids) {
+        callback(data.mids);
       }
-      currentSdk.subscriptions.subscribeToAllMids((data) => {
-        if (data && data.mids) {
-          // The SDK might return mids as an array or object depending on version
-          // Based on previous logs, it's an object { mids: { ... } }
-          callback(data.mids as any);
-        }
-      }).catch(e => console.error("Failed to subscribe to AllMids", e));
-    }).catch(e => console.error("Failed to connect SDK", e));
+    };
+    
+    this.wsCallbacks.get(channel)!.add(wrappedCallback);
 
     return () => {
-      isSubscribed = false;
-      try {
-        if (currentSdk.ws && currentSdk.ws.isConnected()) {
-          currentSdk.subscriptions.unsubscribeFromAllMids().catch(() => {});
+      const callbacks = this.wsCallbacks.get(channel);
+      if (callbacks) {
+        callbacks.delete(wrappedCallback);
+        if (callbacks.size === 0) {
+          this.ws?.send(JSON.stringify({ method: 'unsubscribe', subscription: { type: 'allMids' } }));
         }
-      } catch (e) {
-        // Ignore errors if already disconnected
       }
     };
   }
 
   async getMarkets(): Promise<HLMarket[]> {
-    if (!this.sdk) return [];
-    const [meta, assetCtxs] = await this.sdk.info.perpetuals.getMetaAndAssetCtxs();
-    const midPrices = await this.sdk.info.getAllMids();
+    const [metaAndAssetCtxs, midPrices] = await Promise.all([
+      this.getInfo('metaAndAssetCtxs'),
+      this.getInfo('allMids')
+    ]);
+    
+    const meta = metaAndAssetCtxs[0];
+    const assetCtxs = metaAndAssetCtxs[1];
+    
+    this.metaCache = meta;
+    this.assetCtxsCache = assetCtxs;
     
     return meta.universe.map((asset: any, index: number) => {
       const ctx = assetCtxs[index];
@@ -203,12 +243,13 @@ export class HyperliquidService {
   }
 
   async getMarketState(coin: string) {
-    if (!this.sdk) return null;
-    const [meta, assetCtxs] = await this.sdk.info.perpetuals.getMetaAndAssetCtxs();
-    const assetIndex = meta.universe.findIndex((u: any) => u.name === coin);
+    if (!this.metaCache || !this.assetCtxsCache) {
+      await this.getMarkets();
+    }
+    const assetIndex = this.metaCache.universe.findIndex((u: any) => u.name === coin);
     if (assetIndex === -1) return null;
     
-    const ctx = assetCtxs[assetIndex];
+    const ctx = this.assetCtxsCache[assetIndex];
     const midPrice = parseFloat(ctx.midPx || '0');
     const prevDayPx = parseFloat(ctx.prevDayPx || '0');
     
@@ -221,55 +262,66 @@ export class HyperliquidService {
   }
 
   async getAccountState(user: string) {
-    if (!this.sdk) return null;
-    return this.sdk.info.perpetuals.getClearinghouseState(user);
+    return this.getInfo('clearinghouseState', { user });
+  }
+
+  async getAssetIndex(coin: string): Promise<number> {
+    const meta = await this.fetchMeta();
+    const index = meta.universe.findIndex((u: any) => u.name === coin);
+    if (index === -1) throw new Error(`Unknown asset: ${coin}`);
+    return index;
   }
 
   async placeOrder(order: any) {
-    if (!this.sdk) throw new Error('SDK not initialized');
-    // The SDK handles signing and everything
-    return this.sdk.exchange.placeOrder(order);
+    if (!this.privateKey) throw new Error('Private key not configured');
+    
+    const isMainnet = this.network === 'mainnet';
+    const nonce = Date.now();
+    const vaultAddress = null; // Assuming no vault for now
+
+    // Support single order or array of orders
+    const orders = Array.isArray(order.orders) ? order.orders : [order];
+    const grouping = order.grouping || 'na';
+    const builder = order.builder;
+
+    const wireOrders = await Promise.all(orders.map(async (o: any) => {
+      const assetIndex = await this.getAssetIndex(o.coin);
+      return orderToWire(o, assetIndex);
+    }));
+
+    const action = orderWireToAction(wireOrders, grouping, builder);
+    
+    const signature = await signL1Action(this.privateKey, action, vaultAddress, nonce, isMainnet);
+
+    const payload = {
+      action,
+      nonce,
+      signature,
+      ...(vaultAddress ? { vaultAddress } : {})
+    };
+
+    return this.fetchApi('/exchange', payload);
   }
 
   public getAddress() {
-    // The SDK doesn't directly expose the address easily if initialized with private key 
-    // but we can derive it or store it.
-    // In this SDK, we might need to store it manually or use a helper.
+    if (this.walletAddress) {
+      return this.walletAddress;
+    }
     if (this.privateKey) {
-      // For simplicity, I'll keep the viem logic to get address or just return null if not easy
-      // Actually, I'll just use a small helper to get address from private key if needed.
-      return null; // Will fix this below
+      try {
+        const account = privateKeyToAccount(this.privateKey as Hex);
+        return account.address;
+      } catch (e) {
+        return null;
+      }
     }
     return null;
   }
 
-  // Re-implementing getInfo to keep compatibility
   async getInfoProxy2(type: string, payload: any = {}) {
-    return this.getInfoCompat(type, payload);
+    return this.getInfo(type, payload);
   }
 }
-
-// Re-implementing getAddress using viem for simplicity since it's already in dependencies
-import { privateKeyToAccount } from 'viem/accounts';
-
-const originalGetAddress = HyperliquidService.prototype.getAddress;
-HyperliquidService.prototype.getAddress = function() {
-  if (this.walletAddress && this.walletAddress.startsWith('0x')) {
-    return this.walletAddress;
-  }
-  if (this.privateKey && this.privateKey.startsWith('0x')) {
-    try {
-      const account = privateKeyToAccount(this.privateKey as `0x${string}`);
-      return account.address;
-    } catch (e) {
-      return null;
-    }
-  }
-  return null;
-};
-
-// Also need to fix the getInfo method name in the class
-HyperliquidService.prototype.getInfo = HyperliquidService.prototype.getInfoCompat;
 
 export const hyperliquidService = new HyperliquidService(
   process.env.NEXT_PUBLIC_HYPERLIQUID_PRIVATE_KEY,
