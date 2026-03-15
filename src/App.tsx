@@ -312,7 +312,7 @@ export default function App() {
       }
 
       // Add 5% slippage for market orders to ensure execution
-      const slippage = 0.005;
+      const slippage = 0.0005;
       const limitPriceNum = side === 'long' 
         ? market.price * (1 + slippage) 
         : market.price * (1 - slippage);
@@ -368,7 +368,7 @@ export default function App() {
       const assetIndex = meta.universe.findIndex((u: any) => u.name === pos.symbol);
       
       // Add 5% slippage for market orders
-      const slippage = 0.005;
+      const slippage = 0.0005;
       const isBuy = pos.side === 'short'; // Close short by buying
       const currentPrice = allPrices[pos.symbol] || pos.markPrice;
       
