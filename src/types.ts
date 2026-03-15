@@ -27,6 +27,7 @@ export interface Market {
   high24h: number;
   low24h: number;
   volume24h: number;
+  priceTrend?: 'up' | 'down' | 'neutral';
 }
 
 export interface OrderBookLevel {

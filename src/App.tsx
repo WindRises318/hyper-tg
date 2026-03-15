@@ -90,11 +90,12 @@ export default function App() {
             price: marketState.price,
             change24h: marketState.change24h,
             high24h: marketState.high24h,
-            low24h: marketState.low24h
+            low24h: marketState.low24h,
+            priceTrend: 'neutral'
           }));
         } else if (candles.length > 0) {
           const lastPrice = candles[candles.length - 1].close;
-          setMarket(prev => ({ ...prev, symbol: selectedCoin, price: lastPrice }));
+          setMarket(prev => ({ ...prev, symbol: selectedCoin, price: lastPrice, priceTrend: 'neutral' }));
         }
 
         // Check HL Account
@@ -212,7 +213,13 @@ export default function App() {
         const ask = parseFloat(data.levels[1][0].px);
         const midPrice = (bid + ask) / 2;
         
-        setMarket(prev => ({ ...prev, price: midPrice }));
+        setMarket(prev => {
+          let trend: 'up' | 'down' | 'neutral' = 'neutral';
+          if (midPrice > prev.price) trend = 'up';
+          else if (midPrice < prev.price) trend = 'down';
+          
+          return { ...prev, price: midPrice, priceTrend: trend };
+        });
 
         // Update chart data with real-time price
         setChartData(prevData => {
@@ -525,8 +532,10 @@ export default function App() {
                       </div>
                       <div className="flex flex-col items-end">
                         <span className={cn(
-                          "text-xl font-black tracking-tighter leading-none",
-                          market.change24h >= 0 ? "text-hl-green" : "text-hl-red"
+                          "text-xl font-black tracking-tighter leading-none transition-colors duration-200",
+                          market.priceTrend === 'up' ? "text-hl-green" : 
+                          market.priceTrend === 'down' ? "text-hl-red" : 
+                          "text-hl-text"
                         )}>
                           {market.price.toFixed(2)}
                         </span>

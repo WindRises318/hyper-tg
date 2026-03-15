@@ -7,6 +7,7 @@ export const INITIAL_MARKET: Market = {
   high24h: 66200,
   low24h: 64100,
   volume24h: 1250000000,
+  priceTrend: 'neutral',
 };
 
 export const INITIAL_PROFILE: UserProfile = {

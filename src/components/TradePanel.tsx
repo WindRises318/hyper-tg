@@ -21,6 +21,7 @@ export const TradePanel: React.FC<TradePanelProps> = ({ symbol, price, balance, 
   const [side, setSide] = useState<'long' | 'short'>('long');
   const [sizeUsd, setSizeUsd] = useState<string>('');
   const [leverage, setLeverage] = useState<number>(10);
+  const [percentage, setPercentage] = useState<number>(0);
 
   const handleTrade = () => {
     if (isTrading) return;
@@ -31,6 +32,38 @@ export const TradePanel: React.FC<TradePanelProps> = ({ symbol, price, balance, 
     }
     onTrade(side, numSizeUsd, leverage);
     setSizeUsd('');
+    setPercentage(0);
+  };
+
+  const handleSizeChange = (val: string) => {
+    setSizeUsd(val);
+    const numVal = parseFloat(val);
+    if (!isNaN(numVal) && balance > 0) {
+      const margin = numVal / leverage;
+      const pct = Math.min(100, (margin / balance) * 100);
+      setPercentage(pct);
+    } else {
+      setPercentage(0);
+    }
+  };
+
+  const handlePercentageChange = (pct: number) => {
+    setPercentage(pct);
+    const amount = (balance * (pct / 100) * leverage).toFixed(2);
+    setSizeUsd(amount);
+  };
+
+  const handleLeverageChange = (newLev: number) => {
+    const oldLev = leverage;
+    setLeverage(newLev);
+    
+    // If there's an input value, scale it by the leverage change
+    if (sizeUsd && !isNaN(parseFloat(sizeUsd))) {
+      const currentSize = parseFloat(sizeUsd);
+      const margin = currentSize / oldLev;
+      const newSize = (margin * newLev).toFixed(2);
+      setSizeUsd(newSize);
+    }
   };
 
   const coinSize = sizeUsd && price > 0 ? (parseFloat(sizeUsd) / price) : 0;
@@ -68,7 +101,7 @@ export const TradePanel: React.FC<TradePanelProps> = ({ symbol, price, balance, 
       </div>
 
       {/* Size Input */}
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-3">
         <div className="flex justify-between items-end">
           <label className="text-[10px] text-hl-text-muted uppercase font-bold tracking-wider">Order Size</label>
           <span className="text-[10px] text-hl-text-muted">Available: <span className="text-hl-text">{balance.toFixed(2)} USDC</span></span>
@@ -77,7 +110,7 @@ export const TradePanel: React.FC<TradePanelProps> = ({ symbol, price, balance, 
           <input
             type="number"
             value={sizeUsd}
-            onChange={(e) => setSizeUsd(e.target.value)}
+            onChange={(e) => handleSizeChange(e.target.value)}
             disabled={isTrading}
             placeholder="0.00"
             className="w-full bg-hl-bg border border-hl-border rounded-xl px-3 py-2 text-hl-text font-mono text-base focus:outline-none focus:border-hl-green focus:ring-1 focus:ring-hl-green/30 transition-all disabled:opacity-50"
@@ -87,26 +120,33 @@ export const TradePanel: React.FC<TradePanelProps> = ({ symbol, price, balance, 
           </div>
         </div>
         
-        {/* Quick Percentage Buttons */}
-        <div className="grid grid-cols-4 gap-2">
-          {[25, 50, 75, 100].map((pct) => (
-            <button
-              key={pct}
-              type="button"
-              onClick={() => {
-                const amount = (balance * leverage * (pct / 100)).toFixed(2);
-                setSizeUsd(amount);
-              }}
-              disabled={isTrading || balance <= 0}
-              className="py-1 rounded-lg bg-hl-bg border border-hl-border text-[9px] font-bold text-hl-text-muted hover:border-hl-green hover:text-hl-green transition-all active:scale-95 disabled:opacity-50"
-            >
-              {pct}%
-            </button>
-          ))}
+        {/* Percentage Slider */}
+        <div className="flex flex-col gap-1.5 px-1">
+          <div className="flex justify-between items-center">
+            <span className="text-[9px] text-hl-text-muted font-bold uppercase">Size %</span>
+            <span className="text-[10px] font-mono text-hl-green font-bold">{percentage.toFixed(0)}%</span>
+          </div>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            value={percentage}
+            onChange={(e) => handlePercentageChange(parseInt(e.target.value))}
+            disabled={isTrading || balance <= 0}
+            className="w-full accent-hl-green h-1 bg-hl-border rounded-lg appearance-none cursor-pointer disabled:opacity-50"
+          />
+          <div className="flex justify-between text-[8px] text-hl-text-muted font-mono">
+            <span>0%</span>
+            <span>25%</span>
+            <span>50%</span>
+            <span>75%</span>
+            <span>100%</span>
+          </div>
         </div>
 
         {coinSize > 0 && (
-          <div className="flex justify-between items-center px-1">
+          <div className="flex justify-between items-center px-1 mt-1">
             <span className="text-[10px] text-hl-text-muted uppercase">Estimated Size</span>
             <span className="text-[10px] font-mono text-hl-text">
               ≈ {coinSize.toFixed(4)} {symbol}
@@ -131,7 +171,7 @@ export const TradePanel: React.FC<TradePanelProps> = ({ symbol, price, balance, 
             max="50"
             step="1"
             value={leverage}
-            onChange={(e) => setLeverage(parseInt(e.target.value))}
+            onChange={(e) => handleLeverageChange(parseInt(e.target.value))}
             disabled={isTrading}
             className="w-full accent-hl-green h-1 bg-hl-border rounded-lg appearance-none cursor-pointer disabled:opacity-50"
           />
