@@ -107,21 +107,20 @@ export default function App() {
               equity: hlBalance // Simplified
             });
 
-            const hlPositions = hlState.assetPositions.map((p: any) => {
+            const hlPositions: Position[] = hlState.assetPositions.map((p: any) => {
               const pos = p.position;
-              const side = parseFloat(pos.szi) > 0 ? 'long' : 'short';
               return {
                 id: `hl-${pos.coin}-${Date.now()}`,
                 user_id: address,
                 symbol: pos.coin,
-                side,
+                side: parseFloat(pos.szi) > 0 ? 'long' : 'short',
                 size: Math.abs(parseFloat(pos.szi)),
                 entryPrice: parseFloat(pos.entryPx),
                 markPrice: market.price,
                 leverage: parseInt(pos.leverage.value),
                 unrealizedPnl: parseFloat(pos.unrealizedPnl),
                 margin: parseFloat(pos.marginUsed)
-              };
+              } as Position;
             });
             setPositions(hlPositions);
           }
@@ -219,8 +218,8 @@ export default function App() {
   const totalUnrealizedPnl = positions.reduce((acc, p) => acc + p.unrealizedPnl, 0);
   const currentEquity = profile.balance; // Hyperliquid accountValue already includes PnL
 
-  const handleTrade = async (side: 'long' | 'short', size: number, leverage: number) => {
-    console.log('handleTrade called:', { side, size, leverage, marketPrice: market.price, balance: profile.balance });
+  const handleTrade = async (side: 'long' | 'short', sizeUsd: number, leverage: number) => {
+    console.log('handleTrade called:', { side, sizeUsd, leverage, marketPrice: market.price, balance: profile.balance });
     
     if (!hlAccount) {
       alert('Please configure your Hyperliquid private key in .env.local to trade.');
@@ -233,11 +232,24 @@ export default function App() {
       
       if (assetIndex === -1) throw new Error('Asset not found on Hyperliquid');
 
+      const assetMeta = meta.universe[assetIndex];
+      const szDecimals = assetMeta.szDecimals;
+
+      // Calculate coin size based on USDC size and current price
+      const rawCoinSize = sizeUsd / market.price;
+      // Round to the correct number of decimals
+      const coinSize = parseFloat(rawCoinSize.toFixed(szDecimals));
+
+      if (coinSize <= 0) {
+        alert(`Size too small. Minimum size is ${Math.pow(10, -szDecimals)} ${selectedCoin}`);
+        return;
+      }
+
       const order = {
         asset: assetIndex,
         isBuy: side === 'long',
         limitPx: market.price, // Market order via limit price for simplicity or use market order type
-        sz: size,
+        sz: coinSize,
         reduceOnly: false,
         orderType: { limit: { tif: 'Gtc' as const } }
       };
