@@ -26,11 +26,14 @@ export class HyperliquidService {
   private sdk: Hyperliquid | null = null;
   private network: HLNetwork = 'testnet';
   private privateKey: string | undefined;
+  private walletAddress: string | undefined;
 
-  constructor(privateKey?: string) {
+  constructor(privateKey?: string, walletAddress?: string) {
     this.privateKey = privateKey;
+    this.walletAddress = walletAddress;
     const config = {
       privateKey: privateKey && privateKey.startsWith('0x') ? privateKey : undefined,
+      walletAddress: walletAddress && walletAddress.startsWith('0x') ? walletAddress : undefined,
       testnet: this.network === 'testnet',
       enableWs: true
     };
@@ -53,6 +56,7 @@ export class HyperliquidService {
       // Re-initialize SDK for the new network
       const config = {
         privateKey: this.privateKey && this.privateKey.startsWith('0x') ? this.privateKey : undefined,
+        walletAddress: this.walletAddress && this.walletAddress.startsWith('0x') ? this.walletAddress : undefined,
         testnet: network === 'testnet',
         enableWs: true
       };
@@ -250,6 +254,9 @@ import { privateKeyToAccount } from 'viem/accounts';
 
 const originalGetAddress = HyperliquidService.prototype.getAddress;
 HyperliquidService.prototype.getAddress = function() {
+  if (this.walletAddress && this.walletAddress.startsWith('0x')) {
+    return this.walletAddress;
+  }
   if (this.privateKey && this.privateKey.startsWith('0x')) {
     try {
       const account = privateKeyToAccount(this.privateKey as `0x${string}`);
@@ -264,4 +271,7 @@ HyperliquidService.prototype.getAddress = function() {
 // Also need to fix the getInfo method name in the class
 HyperliquidService.prototype.getInfo = HyperliquidService.prototype.getInfoCompat;
 
-export const hyperliquidService = new HyperliquidService(process.env.NEXT_PUBLIC_HYPERLIQUID_PRIVATE_KEY);
+export const hyperliquidService = new HyperliquidService(
+  process.env.NEXT_PUBLIC_HYPERLIQUID_PRIVATE_KEY,
+  process.env.NEXT_PUBLIC_HYPERLIQUID_WALLET_ADDRESS
+);
