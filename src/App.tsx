@@ -97,23 +97,44 @@ export default function App() {
         console.log("Hyperliquid Address used for balance:", address);
         if (address) {
           setHlAccount(address);
-          const hlState = await hyperliquidService.getAccountState(address);
+          // Fetch both perps and spot state
+          const [hlState, spotState] = await Promise.all([
+            hyperliquidService.getAccountState(address),
+            hyperliquidService.getSpotState(address)
+          ]);
+          
           console.log("Hyperliquid Account State:", hlState);
+          console.log("Hyperliquid Spot State:", spotState);
+          
           if (!isMounted) return;
+          
+          let hlBalance = 0;
+          
           if (hlState) {
-            const hlBalance = parseFloat(
+            hlBalance = parseFloat(
               hlState.crossMarginSummary?.accountValue || 
               hlState.marginSummary?.accountValue || 
               hlState.withdrawable || 
               '0'
             );
-            setProfile({
-              id: address,
-              username: `HL-${address.slice(0, 6)}`,
-              balance: hlBalance,
-              equity: hlBalance // Simplified
-            });
+          }
+          
+          // If perps balance is 0, check spot balance for USDC
+          if (hlBalance === 0 && spotState && spotState.balances) {
+            const usdcBalance = spotState.balances.find((b: any) => b.coin === 'USDC');
+            if (usdcBalance) {
+              hlBalance = parseFloat(usdcBalance.total || '0');
+            }
+          }
+          
+          setProfile({
+            id: address,
+            username: `HL-${address.slice(0, 6)}`,
+            balance: hlBalance,
+            equity: hlBalance // Simplified
+          });
 
+          if (hlState && hlState.assetPositions) {
             const hlPositions: Position[] = hlState.assetPositions.map((p: any) => {
               const pos = p.position;
               return {
@@ -253,12 +274,12 @@ export default function App() {
       }
 
       const order = {
-        asset: assetIndex,
-        isBuy: side === 'long',
-        limitPx: market.price, // Market order via limit price for simplicity or use market order type
+        coin: selectedCoin,
+        is_buy: side === 'long',
+        limit_px: Number(market.price.toPrecision(5)).toString(), // Market order via limit price for simplicity or use market order type
         sz: coinSize,
-        reduceOnly: false,
-        orderType: { limit: { tif: 'Gtc' as const } }
+        reduce_only: false,
+        order_type: { limit: { tif: 'Gtc' as const } }
       };
 
       const response = await fetch('/api/trade', {
@@ -301,12 +322,12 @@ export default function App() {
       const assetIndex = meta.universe.findIndex((u: any) => u.name === pos.symbol);
       
       const order = {
-        asset: assetIndex,
-        isBuy: pos.side === 'short', // Close short by buying
-        limitPx: market.price,
+        coin: pos.symbol,
+        is_buy: pos.side === 'short', // Close short by buying
+        limit_px: Number(market.price.toPrecision(5)).toString(),
         sz: pos.size,
-        reduceOnly: true,
-        orderType: { limit: { tif: 'Gtc' as const } }
+        reduce_only: true,
+        order_type: { limit: { tif: 'Gtc' as const } }
       };
 
       const result = await hyperliquidService.placeOrder(order);

@@ -38,7 +38,7 @@ export class HyperliquidService {
       hasPrivateKey: !!privateKey, 
       walletAddress: walletAddress 
     });
-    this.privateKey = privateKey && privateKey.startsWith('0x') ? privateKey : undefined;
+    this.privateKey = privateKey ? (privateKey.startsWith('0x') ? privateKey : `0x${privateKey}`) : undefined;
     this.walletAddress = walletAddress ? (walletAddress.startsWith('0x') ? walletAddress : `0x${walletAddress}`) : undefined;
     this.connectWs();
   }
@@ -265,6 +265,10 @@ export class HyperliquidService {
     return this.getInfo('clearinghouseState', { user });
   }
 
+  async getSpotState(user: string) {
+    return this.getInfo('spotClearinghouseState', { user });
+  }
+
   async getAssetIndex(coin: string): Promise<number> {
     const meta = await this.fetchMeta();
     const index = meta.universe.findIndex((u: any) => u.name === coin);
@@ -312,6 +316,7 @@ export class HyperliquidService {
         const account = privateKeyToAccount(this.privateKey as Hex);
         return account.address;
       } catch (e) {
+        console.error("Error deriving address from private key:", e);
         return null;
       }
     }
@@ -324,5 +329,6 @@ export class HyperliquidService {
 }
 
 export const hyperliquidService = new HyperliquidService(
-  process.env.NEXT_PUBLIC_HYPERLIQUID_PRIVATE_KEY
+  process.env.NEXT_PUBLIC_HYPERLIQUID_PRIVATE_KEY,
+  process.env.NEXT_PUBLIC_HYPERLIQUID_WALLET_ADDRESS
 );
