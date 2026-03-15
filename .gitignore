@@ -6,6 +6,3 @@ coverage/
 *.log
 .env*
 !.env.example
-.next
-yarn.lock
-next-env.d.ts
