@@ -27,19 +27,16 @@ export interface HLMarket {
 export class HyperliquidService {
   private network: HLNetwork = 'testnet';
   private privateKey: string | undefined;
-  private walletAddress: string | undefined;
   private ws: WebSocket | null = null;
   private wsCallbacks: Map<string, Set<(data: any) => void>> = new Map();
   private assetCtxsCache: any = null;
   private metaCache: any = null;
 
-  constructor(privateKey?: string, walletAddress?: string) {
+  constructor(privateKey?: string) {
     console.log("HyperliquidService init:", { 
-      hasPrivateKey: !!privateKey, 
-      walletAddress: walletAddress 
+      hasPrivateKey: !!privateKey
     });
     this.privateKey = privateKey ? (privateKey.startsWith('0x') ? privateKey : `0x${privateKey}`) : undefined;
-    this.walletAddress = walletAddress ? (walletAddress.startsWith('0x') ? walletAddress : `0x${walletAddress}`) : undefined;
     this.connectWs();
   }
 
@@ -308,9 +305,6 @@ export class HyperliquidService {
   }
 
   public getAddress() {
-    if (this.walletAddress) {
-      return this.walletAddress;
-    }
     if (this.privateKey) {
       try {
         const account = privateKeyToAccount(this.privateKey as Hex);
@@ -329,6 +323,5 @@ export class HyperliquidService {
 }
 
 export const hyperliquidService = new HyperliquidService(
-  process.env.NEXT_PUBLIC_HYPERLIQUID_PRIVATE_KEY,
-  process.env.NEXT_PUBLIC_HYPERLIQUID_WALLET_ADDRESS
+  process.env.NEXT_PUBLIC_HYPERLIQUID_PRIVATE_KEY
 );
