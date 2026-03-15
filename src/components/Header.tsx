@@ -13,7 +13,6 @@ interface HeaderProps {
   market: Market;
   availableCoins: string[];
   onCoinChange: (coin: string) => void;
-  hasHlAccount: boolean;
   network: 'mainnet' | 'testnet';
   onNetworkChange: (network: 'mainnet' | 'testnet') => void;
 }
@@ -23,7 +22,6 @@ export const Header: React.FC<HeaderProps> = ({
   market, 
   availableCoins, 
   onCoinChange,
-  hasHlAccount,
   network,
   onNetworkChange
 }) => {
@@ -70,39 +68,6 @@ export const Header: React.FC<HeaderProps> = ({
           <button className="text-hl-text-muted hover:text-hl-text p-1">
             <Bell size={18} />
           </button>
-        </div>
-      </div>
-
-      <div className={cn(
-        "grid grid-cols-2 gap-2 rounded-lg p-3 border transition-colors",
-        "bg-hl-green/5 border-hl-green/30"
-      )}>
-        <div className="flex flex-col">
-          <span className="text-[10px] text-hl-text-muted uppercase tracking-wider">
-            HL Balance
-          </span>
-          <div className="flex items-center gap-1">
-            <span className="text-lg font-mono font-bold text-hl-text">
-              {profile.balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </span>
-            <span className="text-xs text-hl-text-muted">USDC</span>
-          </div>
-        </div>
-        <div className="flex flex-col border-l border-hl-border pl-3">
-          <span className="text-[10px] text-hl-text-muted uppercase tracking-wider">
-            HL Account
-          </span>
-          <div className="flex items-center gap-1">
-            {hasHlAccount ? (
-              <span className="text-xs font-mono text-hl-text truncate max-w-[100px]">
-                {profile.id.slice(0, 6)}...{profile.id.slice(-4)}
-              </span>
-            ) : (
-              <span className="text-xs font-mono text-hl-text-muted">
-                Not Connected
-              </span>
-            )}
-          </div>
         </div>
       </div>
 

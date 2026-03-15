@@ -15,68 +15,78 @@ interface PositionsProps {
 
 export const Positions: React.FC<PositionsProps> = ({ positions, onClose, closingIds = new Set() }) => {
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex justify-between items-center px-1">
-        <h3 className="text-sm font-bold text-hl-text uppercase tracking-wider">Open Positions</h3>
-        <span className="text-[10px] text-hl-text-muted">{positions.length} active</span>
-      </div>
-      
+    <div className="flex flex-col gap-3">
       {positions.length === 0 ? (
-        <div className="bg-hl-surface border border-hl-border border-dashed rounded-lg p-8 flex flex-col items-center justify-center gap-2">
-          <p className="text-sm text-hl-text-muted">No open positions</p>
+        <div className="bg-hl-bg/30 border border-hl-border border-dashed rounded-xl p-8 flex flex-col items-center justify-center gap-2">
+          <p className="text-xs text-hl-text-muted">No open positions</p>
         </div>
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-3">
           {positions.map((pos) => (
-            <div key={pos.id} className="bg-hl-surface border border-hl-border rounded-lg p-3 flex flex-col gap-2">
-              <div className="flex justify-between items-start">
+            <div key={pos.id} className="bg-hl-bg/50 border border-hl-border rounded-xl p-3 flex flex-col gap-3 shadow-sm">
+              <div className="flex justify-between items-center">
                 <div className="flex items-center gap-2">
-                  <span className={cn(
-                    "text-xs font-bold px-1.5 py-0.5 rounded",
-                    pos.side === 'long' ? "bg-hl-green/20 text-hl-green" : "bg-hl-red/20 text-hl-red"
+                  <div className={cn(
+                    "w-2 h-6 rounded-full",
+                    pos.side === 'long' ? "bg-hl-green" : "bg-hl-red"
+                  )} />
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-bold text-sm">{pos.symbol}-PERP</span>
+                      <span className="text-[10px] bg-hl-border px-1 rounded text-hl-text-muted">{pos.leverage}x</span>
+                    </div>
+                    <p className={cn(
+                      "text-[10px] font-bold uppercase",
+                      pos.side === 'long' ? "text-hl-green" : "text-hl-red"
+                    )}>
+                      {pos.side} {pos.size}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className={cn(
+                    "text-sm font-mono font-bold",
+                    pos.unrealizedPnl >= 0 ? "text-hl-green" : "text-hl-red"
                   )}>
-                    {pos.side.toUpperCase()}
-                  </span>
-                  <span className="font-bold text-sm">{pos.symbol}</span>
-                  <span className="text-xs text-hl-text-muted">{pos.leverage}x</span>
-                </div>
-                <div className={cn(
-                  "text-sm font-mono font-bold",
-                  pos.unrealizedPnl >= 0 ? "text-hl-green" : "text-hl-red"
-                )}>
-                  {pos.unrealizedPnl >= 0 ? '+' : ''}{pos.unrealizedPnl.toFixed(2)} USDC
+                    {pos.unrealizedPnl >= 0 ? '+' : ''}{pos.unrealizedPnl.toFixed(2)}
+                  </p>
+                  <p className="text-[10px] text-hl-text-muted">USDC PnL</p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-2 text-[10px] uppercase text-hl-text-muted">
-                <div>
-                  <p>Size</p>
-                  <p className="text-hl-text font-mono">{pos.size} {pos.symbol}</p>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2 py-2 border-y border-hl-border/30">
+                <div className="flex justify-between">
+                  <span className="text-[10px] text-hl-text-muted uppercase">Entry</span>
+                  <span className="text-[10px] text-hl-text font-mono">{pos.entryPrice.toFixed(2)}</span>
                 </div>
-                <div>
-                  <p>Entry Price</p>
-                  <p className="text-hl-text font-mono">{pos.entryPrice.toFixed(2)}</p>
+                <div className="flex justify-between">
+                  <span className="text-[10px] text-hl-text-muted uppercase">Mark</span>
+                  <span className="text-[10px] text-hl-text font-mono">{pos.markPrice.toFixed(2)}</span>
                 </div>
-                <div>
-                  <p>Mark Price</p>
-                  <p className="text-hl-text font-mono">{pos.markPrice.toFixed(2)}</p>
+                <div className="flex justify-between">
+                  <span className="text-[10px] text-hl-text-muted uppercase">Liq. Price</span>
+                  <span className="text-[10px] text-hl-red font-mono">--</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[10px] text-hl-text-muted uppercase">Margin</span>
+                  <span className="text-[10px] text-hl-text font-mono">{(pos.size * pos.entryPrice / pos.leverage).toFixed(2)}</span>
                 </div>
               </div>
 
-              <div className="flex gap-2 pt-1">
+              <div className="flex gap-2">
                 <button
                   onClick={() => onClose(pos.id)}
                   disabled={closingIds.has(pos.id)}
                   className={cn(
-                    "flex-1 text-hl-text text-xs py-1.5 rounded transition-colors",
+                    "flex-1 text-[10px] py-1.5 rounded-lg font-bold transition-all active:scale-95",
                     closingIds.has(pos.id) 
-                      ? "bg-hl-border/50 cursor-not-allowed" 
-                      : "bg-hl-border hover:bg-hl-border/80"
+                      ? "bg-hl-border/50 text-hl-text-muted cursor-not-allowed" 
+                      : "bg-hl-red/10 text-hl-red hover:bg-hl-red/20 border border-hl-red/20"
                   )}
                 >
                   {closingIds.has(pos.id) ? 'Closing...' : 'Close Position'}
                 </button>
-                <button className="flex-1 bg-hl-border hover:bg-hl-border/80 text-hl-text text-xs py-1.5 rounded transition-colors">
+                <button className="flex-1 bg-hl-bg border border-hl-border hover:border-hl-text-muted text-hl-text-muted hover:text-hl-text text-[10px] py-1.5 rounded-lg font-bold transition-all active:scale-95">
                   TP/SL
                 </button>
               </div>

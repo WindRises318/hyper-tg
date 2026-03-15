@@ -16,7 +16,7 @@ import { hyperliquidService, Candle } from './services/hyperliquidService';
 import { formatPriceTo5SigFigs } from './services/hyperliquidUtils';
 import { dbService } from './services/dbService';
 import { motion, AnimatePresence } from 'motion/react';
-import { TrendingUp, History, User, Activity, Loader2, ArrowUpRight, ArrowDownRight, Wallet } from 'lucide-react';
+import { TrendingUp, TrendingDown, History, User, Activity, Loader2, ArrowUpRight, ArrowDownRight, Wallet } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -38,6 +38,9 @@ export default function App() {
   const [availableCoins, setAvailableCoins] = useState<string[]>([]);
   const [selectedCoin, setSelectedCoin] = useState('BTC');
   const [selectedInterval, setSelectedInterval] = useState('15m');
+  const [tradeViewTab, setTradeViewTab] = useState<'chart' | 'orderbook'>('chart');
+  const [bottomTradeTab, setBottomTradeTab] = useState<'trade' | 'positions' | 'activity'>('trade');
+  const [isTrading, setIsTrading] = useState(false);
   const [network, setNetwork] = useState<'mainnet' | 'testnet'>('testnet');
   const [hlAccount, setHlAccount] = useState<string | null>(null);
   const [closingPositionIds, setClosingPositionIds] = useState<Set<string>>(new Set());
@@ -281,6 +284,7 @@ export default function App() {
     }
 
     try {
+      setIsTrading(true);
       const meta = await hyperliquidService.fetchMeta();
       const assetIndex = meta.universe.findIndex((u: any) => u.name === selectedCoin);
       
@@ -334,6 +338,8 @@ export default function App() {
     } catch (err: any) {
       console.error('HL Trade failed:', err);
       alert(`Trade failed: ${err.message}`);
+    } finally {
+      setIsTrading(false);
     }
   };
 
@@ -410,7 +416,6 @@ export default function App() {
           setIsLoading(true);
           setSelectedCoin(coin);
         }}
-        hasHlAccount={!!hlAccount}
         network={network}
         onNetworkChange={(newNetwork) => {
           setNetwork(newNetwork);
@@ -450,68 +455,246 @@ export default function App() {
               exit={{ opacity: 0, x: 20 }}
               className="flex flex-col gap-4 p-4"
             >
-              <div className="bg-hl-surface rounded-lg border border-hl-border overflow-hidden">
-                <div className="flex gap-2 p-2 border-b border-hl-border overflow-x-auto no-scrollbar">
-                  {['1m', '5m', '15m', '1h', '4h', '1d'].map(interval => (
-                    <button
-                      key={interval}
-                      onClick={() => setSelectedInterval(interval)}
-                      className={cn(
-                        "px-2 py-1 rounded text-[10px] font-bold transition-colors",
-                        selectedInterval === interval ? "bg-hl-green text-black" : "text-hl-text-muted hover:text-hl-text"
-                      )}
-                    >
-                      {interval}
-                    </button>
-                  ))}
+              {/* Chart/Orderbook Tabs */}
+              <div className="bg-hl-surface rounded-2xl border border-hl-border overflow-hidden shadow-2xl shadow-black/20">
+                <div className="flex bg-hl-bg/80 backdrop-blur-md border-b border-hl-border p-1">
+                  <button
+                    onClick={() => setTradeViewTab('chart')}
+                    className={cn(
+                      "flex-1 py-1.5 text-xs font-bold transition-all rounded-lg",
+                      tradeViewTab === 'chart' ? "bg-hl-surface text-hl-green shadow-sm" : "text-hl-text-muted hover:text-hl-text"
+                    )}
+                  >
+                    Chart
+                  </button>
+                  <button
+                    onClick={() => setTradeViewTab('orderbook')}
+                    className={cn(
+                      "flex-1 py-1.5 text-xs font-bold transition-all rounded-lg",
+                      tradeViewTab === 'orderbook' ? "bg-hl-surface text-hl-green shadow-sm" : "text-hl-text-muted hover:text-hl-text"
+                    )}
+                  >
+                    Order Book
+                  </button>
                 </div>
-                <Chart data={chartData} symbol={market.symbol} />
+
+                {tradeViewTab === 'chart' ? (
+                  <div className="flex flex-col">
+                    <div className="flex gap-2 p-2 border-b border-hl-border overflow-x-auto no-scrollbar">
+                      {['1m', '5m', '15m', '1h', '4h', '1d'].map(interval => (
+                        <button
+                          key={interval}
+                          onClick={() => setSelectedInterval(interval)}
+                          className={cn(
+                            "px-2 py-1 rounded text-[10px] font-bold transition-colors",
+                            selectedInterval === interval ? "bg-hl-green text-black" : "text-hl-text-muted hover:text-hl-text"
+                          )}
+                        >
+                          {interval}
+                        </button>
+                      ))}
+                    </div>
+                    <Chart data={chartData} symbol={market.symbol} />
+                  </div>
+                ) : (
+                  <div className="p-4 bg-hl-surface">
+                    <div className="flex justify-between items-center mb-4 px-1">
+                      <div className="flex flex-col">
+                        <h3 className="text-[10px] font-bold text-hl-text-muted uppercase tracking-widest">Market Depth</h3>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <div className="w-1.5 h-1.5 rounded-full bg-hl-green animate-pulse" />
+                          <span className="text-[9px] text-hl-text-muted font-mono">Live Feed</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 bg-hl-bg px-2 py-1 rounded border border-hl-border">
+                        <span className="text-[10px] text-hl-text-muted">Step</span>
+                        <span className="text-[10px] text-hl-green font-mono font-bold">0.01</span>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4 mb-2 px-1 text-[9px] font-bold text-hl-text-muted uppercase tracking-tighter">
+                      <div className="flex justify-between">
+                        <span>Price</span>
+                        <span>Size</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Price</span>
+                        <span>Size</span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-0.5 font-mono text-[11px]">
+                      {/* Bids and Asks side by side or stacked? Let's keep it stacked but cleaner */}
+                      <div className="flex flex-col gap-0.5">
+                        {orderBook?.levels?.[1]?.slice(0, 6).reverse().map((level, i) => (
+                          <div key={`ask-${i}`} className="flex justify-between relative py-0.5 px-1 group hover:bg-hl-red/5 transition-colors">
+                            <div 
+                              className="absolute inset-y-0 right-0 bg-hl-red/10 transition-all duration-500" 
+                              style={{ 
+                                width: `${Math.min(100, (parseFloat(level.sz) / 5) * 100)}%`, 
+                              }} 
+                            />
+                            <span className="text-hl-red font-bold z-10">{parseFloat(level.px).toFixed(2)}</span>
+                            <span className="text-hl-text/80 z-10">{parseFloat(level.sz).toFixed(3)}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="py-3 my-1 flex items-center justify-center gap-3 bg-hl-bg/30 rounded-lg border-y border-hl-border/50">
+                        <span className="text-lg font-black text-hl-text tracking-tight">
+                          {market.price.toFixed(2)}
+                        </span>
+                        <div className={cn(
+                          "flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold",
+                          market.change24h >= 0 ? "bg-hl-green/10 text-hl-green" : "bg-hl-red/10 text-hl-red"
+                        )}>
+                          {market.change24h >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+                          {Math.abs(market.change24h).toFixed(2)}%
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-0.5">
+                        {orderBook?.levels?.[0]?.slice(0, 6).map((level, i) => (
+                          <div key={`bid-${i}`} className="flex justify-between relative py-0.5 px-1 group hover:bg-hl-green/5 transition-colors">
+                            <div 
+                              className="absolute inset-y-0 right-0 bg-hl-green/10 transition-all duration-500" 
+                              style={{ 
+                                width: `${Math.min(100, (parseFloat(level.sz) / 5) * 100)}%` 
+                              }} 
+                            />
+                            <span className="text-hl-green font-bold z-10">{parseFloat(level.px).toFixed(2)}</span>
+                            <span className="text-hl-text/80 z-10">{parseFloat(level.sz).toFixed(3)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
-              <TradePanel 
-                symbol={market.symbol} 
-                price={market.price} 
-                onTrade={(side, size, leverage) => {
-                  console.log('App onTrade prop called with:', { side, size, leverage });
-                  handleTrade(side, size, leverage);
-                }} 
-              />
-              <div className="bg-hl-surface p-4 rounded-lg border border-hl-border">
-                <div className="flex justify-between items-center mb-3">
-                  <h3 className="text-xs font-bold text-hl-text-muted uppercase tracking-wider">Order Book</h3>
-                  <div className="flex gap-2">
-                    <span className="text-[10px] text-hl-green bg-hl-green/10 px-1 rounded">0.01</span>
-                  </div>
+
+              <div className="flex flex-col bg-hl-surface rounded-2xl border border-hl-border overflow-hidden shadow-2xl shadow-black/20">
+                <div className="flex bg-hl-bg/80 backdrop-blur-md border-b border-hl-border p-1">
+                  <button
+                    onClick={() => setBottomTradeTab('trade')}
+                    className={cn(
+                      "flex-1 py-1.5 text-xs font-bold transition-all rounded-lg",
+                      bottomTradeTab === 'trade' ? "bg-hl-surface text-hl-green shadow-sm" : "text-hl-text-muted hover:text-hl-text"
+                    )}
+                  >
+                    Trade
+                  </button>
+                  <button
+                    onClick={() => setBottomTradeTab('positions')}
+                    className={cn(
+                      "flex-1 py-1.5 text-xs font-bold transition-all rounded-lg relative",
+                      bottomTradeTab === 'positions' ? "bg-hl-surface text-hl-green shadow-sm" : "text-hl-text-muted hover:text-hl-text"
+                    )}
+                  >
+                    Positions
+                    {positions.length > 0 && (
+                      <span className="absolute top-1 right-2 w-4 h-4 bg-hl-green text-black text-[8px] font-black rounded-full flex items-center justify-center ring-2 ring-hl-bg">
+                        {positions.length}
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setBottomTradeTab('activity')}
+                    className={cn(
+                      "flex-1 py-1.5 text-xs font-bold transition-all rounded-lg",
+                      bottomTradeTab === 'activity' ? "bg-hl-surface text-hl-green shadow-sm" : "text-hl-text-muted hover:text-hl-text"
+                    )}
+                  >
+                    Activity
+                  </button>
                 </div>
-                <div className="flex flex-col gap-1 font-mono text-xs">
-                  {orderBook?.levels?.[1]?.slice(0, 5).reverse().map((level, i) => (
-                    <div key={`ask-${i}`} className="flex justify-between relative">
-                      <div 
-                        className="absolute inset-0 bg-hl-red/5" 
-                        style={{ 
-                          width: `${Math.min(100, (parseFloat(level.sz) / 10) * 100)}%`, 
-                          right: 0, 
-                          left: 'auto' 
-                        }} 
-                      />
-                      <span className="text-hl-red z-10">{parseFloat(level.px).toFixed(2)}</span>
-                      <span className="text-hl-text z-10">{parseFloat(level.sz).toFixed(3)}</span>
-                    </div>
-                  ))}
-                  <div className="py-2 text-center font-bold text-sm border-y border-hl-border my-1">
-                    {market.price.toFixed(2)}
-                  </div>
-                  {orderBook?.levels?.[0]?.slice(0, 5).map((level, i) => (
-                    <div key={`bid-${i}`} className="flex justify-between relative">
-                      <div 
-                        className="absolute inset-0 bg-hl-green/5" 
-                        style={{ 
-                          width: `${Math.min(100, (parseFloat(level.sz) / 10) * 100)}%` 
-                        }} 
-                      />
-                      <span className="text-hl-green z-10">{parseFloat(level.px).toFixed(2)}</span>
-                      <span className="text-hl-text z-10">{parseFloat(level.sz).toFixed(3)}</span>
-                    </div>
-                  ))}
+
+                <div className="p-0">
+                  <AnimatePresence mode="wait">
+                    {bottomTradeTab === 'trade' && (
+                      <motion.div
+                        key="trade-panel"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        <TradePanel 
+                          symbol={market.symbol} 
+                          price={market.price} 
+                          balance={profile.balance}
+                          isTrading={isTrading}
+                          onTrade={(side, size, leverage) => {
+                            console.log('App onTrade prop called with:', { side, size, leverage });
+                            handleTrade(side, size, leverage);
+                          }} 
+                        />
+                      </motion.div>
+                    )}
+
+                    {bottomTradeTab === 'positions' && (
+                      <motion.div
+                        key="positions-panel"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.2 }}
+                        className="p-4 max-h-[300px] overflow-y-auto"
+                      >
+                        <Positions 
+                          positions={positions} 
+                          onClose={handleClosePosition}
+                          closingIds={closingPositionIds}
+                        />
+                      </motion.div>
+                    )}
+
+                    {bottomTradeTab === 'activity' && (
+                      <motion.div
+                        key="activity-panel"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.2 }}
+                        className="p-4 max-h-[300px] overflow-y-auto"
+                      >
+                        <div className="flex flex-col gap-3">
+                          {history.length === 0 ? (
+                            <div className="p-6 text-center">
+                              <p className="text-xs text-hl-text-muted">No recent trades</p>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col gap-2">
+                              {history.slice(0, 5).map((item) => (
+                                <div key={item.id} className="bg-hl-bg/50 p-3 rounded-xl border border-hl-border flex justify-between items-center group hover:border-hl-green/30 transition-colors">
+                                  <div className="flex items-center gap-3">
+                                    <div className={cn(
+                                      "w-8 h-8 rounded-lg flex items-center justify-center transition-transform group-hover:scale-110",
+                                      item.side === 'long' ? "bg-hl-green/10 text-hl-green" : "bg-hl-red/10 text-hl-red"
+                                    )}>
+                                      {item.side === 'long' ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
+                                    </div>
+                                    <div>
+                                      <p className="text-xs font-bold">{item.symbol}-PERP</p>
+                                      <p className="text-[10px] text-hl-text-muted">{item.dir} {item.size}</p>
+                                    </div>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className={cn(
+                                      "text-xs font-bold font-mono",
+                                      item.pnl > 0 ? "text-hl-green" : item.pnl < 0 ? "text-hl-red" : "text-hl-text"
+                                    )}>
+                                      {item.pnl > 0 ? '+' : ''}{item.pnl.toFixed(2)}
+                                    </p>
+                                    <p className="text-[10px] text-hl-text-muted">{new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
               </div>
             </motion.div>
@@ -639,9 +822,21 @@ export default function App() {
                 <div className="bg-hl-surface p-4 rounded-xl border border-hl-border flex justify-between items-center">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-hl-green/10 rounded-lg flex items-center justify-center text-hl-green">
+                      <User size={20} />
+                    </div>
+                    <span className="font-bold">HL Account</span>
+                  </div>
+                  <span className="font-mono text-xs text-hl-text truncate max-w-[150px]">
+                    {hlAccount ? `${hlAccount.slice(0, 6)}...${hlAccount.slice(-4)}` : 'Not Connected'}
+                  </span>
+                </div>
+
+                <div className="bg-hl-surface p-4 rounded-xl border border-hl-border flex justify-between items-center">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-hl-green/10 rounded-lg flex items-center justify-center text-hl-green">
                       <Wallet size={20} />
                     </div>
-                    <span className="font-bold">Total Balance</span>
+                    <span className="font-bold">HL Balance</span>
                   </div>
                   <span className="font-mono font-bold text-hl-text">{profile.balance.toFixed(2)} USDC</span>
                 </div>
