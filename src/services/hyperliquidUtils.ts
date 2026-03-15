@@ -49,6 +49,28 @@ function normalizeTrailingZeros(action: any): any {
   return res;
 }
 
+export function formatPriceTo5SigFigs(price: number): string {
+  const p = Number(price.toPrecision(5));
+  let str = p.toString();
+  if (str.includes('e')) {
+    const [base, exp] = str.split('e');
+    const expNum = parseInt(exp, 10);
+    if (expNum < 0) {
+      const baseStr = base.replace('.', '');
+      str = '0.' + '0'.repeat(Math.abs(expNum) - 1) + baseStr;
+    } else {
+      const baseStr = base.replace('.', '');
+      const zeros = expNum - (baseStr.length - 1); 
+      if (zeros > 0) {
+        str = baseStr + '0'.repeat(zeros);
+      } else {
+        str = baseStr.slice(0, expNum + 1) + '.' + baseStr.slice(expNum + 1);
+      }
+    }
+  }
+  return str;
+}
+
 export function orderTypeToWire(orderType: any): any {
   if (orderType.limit) {
     return { limit: orderType.limit };

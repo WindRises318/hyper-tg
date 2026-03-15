@@ -13,6 +13,7 @@ import { BottomNav } from './components/BottomNav';
 import { Market, Position, UserProfile, OrderBook, TradeHistory } from './types';
 import { INITIAL_MARKET, INITIAL_PROFILE } from './lib/mockData';
 import { hyperliquidService, Candle } from './services/hyperliquidService';
+import { formatPriceTo5SigFigs } from './services/hyperliquidUtils';
 import { dbService } from './services/dbService';
 import { motion, AnimatePresence } from 'motion/react';
 import { TrendingUp, History, User, Activity, Loader2, ArrowUpRight, ArrowDownRight, Wallet } from 'lucide-react';
@@ -274,6 +275,11 @@ export default function App() {
       return;
     }
 
+    if (market.price <= 0) {
+      alert('Waiting for market price to update. Please try again in a moment.');
+      return;
+    }
+
     try {
       const meta = await hyperliquidService.fetchMeta();
       const assetIndex = meta.universe.findIndex((u: any) => u.name === selectedCoin);
@@ -293,13 +299,19 @@ export default function App() {
         return;
       }
 
+      // Add 5% slippage for market orders to ensure execution
+      const slippage = 0.05;
+      const limitPriceNum = side === 'long' 
+        ? market.price * (1 + slippage) 
+        : market.price * (1 - slippage);
+
       const order = {
         coin: selectedCoin,
         is_buy: side === 'long',
-        limit_px: Number(market.price.toPrecision(5)).toString(), // Market order via limit price for simplicity or use market order type
+        limit_px: formatPriceTo5SigFigs(limitPriceNum),
         sz: coinSize,
         reduce_only: false,
-        order_type: { limit: { tif: 'Gtc' as const } }
+        order_type: { limit: { tif: 'Ioc' as const } } // Immediate or Cancel for market-like behavior
       };
 
       const response = await fetch('/api/trade', {
@@ -341,13 +353,32 @@ export default function App() {
       const meta = await hyperliquidService.fetchMeta();
       const assetIndex = meta.universe.findIndex((u: any) => u.name === pos.symbol);
       
+      // Add 5% slippage for market orders
+      const slippage = 0.05;
+      const isBuy = pos.side === 'short'; // Close short by buying
+      const currentPrice = allPrices[pos.symbol] || pos.markPrice;
+      
+      if (currentPrice <= 0) {
+        alert('Waiting for market price to update. Please try again in a moment.');
+        setClosingPositionIds(prev => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+        return;
+      }
+
+      const limitPriceNum = isBuy 
+        ? currentPrice * (1 + slippage) 
+        : currentPrice * (1 - slippage);
+
       const order = {
         coin: pos.symbol,
-        is_buy: pos.side === 'short', // Close short by buying
-        limit_px: Number(market.price.toPrecision(5)).toString(),
+        is_buy: isBuy,
+        limit_px: formatPriceTo5SigFigs(limitPriceNum),
         sz: pos.size,
         reduce_only: true,
-        order_type: { limit: { tif: 'Gtc' as const } }
+        order_type: { limit: { tif: 'Ioc' as const } }
       };
 
       const result = await hyperliquidService.placeOrder(order);
