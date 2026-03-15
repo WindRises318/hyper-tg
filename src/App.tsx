@@ -98,13 +98,15 @@ export default function App() {
         if (address) {
           setHlAccount(address);
           // Fetch both perps and spot state
-          const [hlState, spotState] = await Promise.all([
+          const [hlState, spotState, fills] = await Promise.all([
             hyperliquidService.getAccountState(address),
-            hyperliquidService.getSpotState(address)
+            hyperliquidService.getSpotState(address),
+            hyperliquidService.getUserFills(address)
           ]);
           
           console.log("Hyperliquid Account State:", hlState);
           console.log("Hyperliquid Spot State:", spotState);
+          console.log("Hyperliquid Fills:", fills);
           
           if (!isMounted) return;
           
@@ -151,6 +153,24 @@ export default function App() {
               } as Position;
             });
             setPositions(hlPositions);
+          }
+
+          if (Array.isArray(fills)) {
+            const historyData: TradeHistory[] = fills.map((fill: any) => ({
+              id: fill.tid?.toString() || fill.hash || Math.random().toString(),
+              user_id: address,
+              symbol: fill.coin,
+              side: fill.side === 'B' ? 'long' : 'short',
+              dir: fill.dir || (fill.side === 'B' ? 'Buy' : 'Sell'),
+              size: parseFloat(fill.sz),
+              price: parseFloat(fill.px),
+              fee: parseFloat(fill.fee),
+              pnl: parseFloat(fill.closedPnl),
+              timestamp: fill.time
+            }));
+            // Sort by time descending
+            historyData.sort((a, b) => b.timestamp - a.timestamp);
+            setHistory(historyData);
           }
         } else {
           setProfile({
@@ -536,27 +556,27 @@ export default function App() {
                           </div>
                           <div>
                             <p className="text-sm font-bold">{item.symbol}-PERP</p>
-                            <p className="text-[10px] text-hl-text-muted uppercase">{item.side} {item.size} {item.symbol}</p>
+                            <p className="text-[10px] text-hl-text-muted uppercase">{item.dir} {item.size} {item.symbol}</p>
                           </div>
                         </div>
                         <div className="text-right">
                           <p className={cn(
                             "text-sm font-bold font-mono",
-                            item.pnl >= 0 ? "text-hl-green" : "text-hl-red"
+                            item.pnl > 0 ? "text-hl-green" : item.pnl < 0 ? "text-hl-red" : "text-hl-text"
                           )}>
-                            {item.pnl >= 0 ? '+' : ''}{item.pnl.toFixed(2)}
+                            {item.pnl > 0 ? '+' : ''}{item.pnl.toFixed(2)}
                           </p>
-                          <p className="text-[10px] text-hl-text-muted">{new Date(item.closed_at).toLocaleDateString()}</p>
+                          <p className="text-[10px] text-hl-text-muted">{new Date(item.timestamp).toLocaleString()}</p>
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-2 pt-2 border-t border-hl-border/50">
                         <div>
-                          <p className="text-[10px] text-hl-text-muted uppercase">Entry</p>
-                          <p className="text-xs font-mono">{item.entry_price.toFixed(2)}</p>
+                          <p className="text-[10px] text-hl-text-muted uppercase">Price</p>
+                          <p className="text-xs font-mono">{item.price.toFixed(2)}</p>
                         </div>
                         <div className="text-right">
-                          <p className="text-[10px] text-hl-text-muted uppercase">Exit</p>
-                          <p className="text-xs font-mono">{item.exit_price.toFixed(2)}</p>
+                          <p className="text-[10px] text-hl-text-muted uppercase">Fee</p>
+                          <p className="text-xs font-mono">{item.fee.toFixed(4)}</p>
                         </div>
                       </div>
                     </div>

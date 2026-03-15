@@ -111,6 +111,10 @@ export class HyperliquidService {
     return this.metaCache;
   }
 
+  async getUserFills(user: string) {
+    return this.getInfo('userFills', { user });
+  }
+
   async getInfoCompat(type: string, payload: any = {}) {
     return this.getInfo(type, payload);
   }

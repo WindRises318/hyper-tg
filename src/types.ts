@@ -53,9 +53,10 @@ export interface TradeHistory {
   user_id: string;
   symbol: string;
   side: 'long' | 'short';
+  dir: string;
   size: number;
-  entry_price: number;
-  exit_price: number;
+  price: number;
+  fee: number;
   pnl: number;
-  closed_at: string;
+  timestamp: number;
 }
